@@ -113,6 +113,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private TextView btnWifi;
     private TextView shamsiDate;
     private TextView stats;
+    /** Home Assistant info row above the dock, filled from ha_tiles.json (see HaStrip). */
+    private HaStrip haStrip;
+    private final Runnable haTick = new Runnable() {
+        @Override
+        public void run() {
+            if (haStrip != null) haStrip.refresh();
+            handler.postDelayed(this, HaStrip.REFRESH_MS);
+        }
+    };
     /** config.xml show_stats, overridable by a theme. Off: the line is gone and nothing is read. */
     private boolean showStats;
     private boolean shamsi;
@@ -282,6 +291,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnWifi = findViewById(R.id.btnWifi);
         shamsiDate = findViewById(R.id.shamsiDate);
         stats = findViewById(R.id.stats);
+        haStrip = new HaStrip(this, findViewById(R.id.haStrip));
         showStats = cfg.showStats;
         shamsi = cfg.shamsiDate;
         greetingName = cfg.greetingName;
@@ -551,6 +561,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         sky.update();
         wallpaperPlayer.start();
         handler.postDelayed(minuteTick, MINUTE_MS);
+        handler.removeCallbacks(haTick);
+        haTick.run();
         if (festive && diya != null) {
             diya.start();
             LocalDate today = LocalDate.now();
@@ -647,6 +659,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         heroName.animate().cancel();
         ambient.animate().cancel();
         handler.removeCallbacks(minuteTick);
+        handler.removeCallbacks(haTick);
         stopStats();
         if (diya != null) diya.stop();
         cancelPendingFocusScroll();
