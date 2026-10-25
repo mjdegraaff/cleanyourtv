@@ -18,6 +18,7 @@
   .ticks i.on { background: var(--rain); }
   .radar-bar .l { color: var(--text-3); font-size: calc(var(--u) * .85); }
   .map-title { position: absolute; left: calc(var(--u) * 1.3); top: calc(var(--u) * 1.1); z-index: 500; background: rgba(7,10,20,.6); border-radius: 999px; padding: calc(var(--u) * .35) calc(var(--u) * 1); }
+  .radar { filter: saturate(1.4) contrast(1.15); }  /* rain stands out on the blue-grey map */
   .home-pin { width: 100%; height: 100%; border-radius: 50%; background: #fff; box-shadow: 0 0 0 4px rgba(255,255,255,.25), 0 0 18px rgba(255,255,255,.6); }
 
   .side { display: flex; flex-direction: column; gap: calc(var(--u) * 1); min-height: 0; }
@@ -94,7 +95,7 @@ function setupMap(home) {
   map.attributionControl.setPrefix(false);
   // OpenFreeMap: free vector map, no key. Own pane under the radar tiles.
   map.createPane('base').style.zIndex = 150;
-  L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/dark', pane: 'base', attribution: 'OpenFreeMap © OpenMapTiles · © OpenStreetMap · RainViewer' }).addTo(map);
+  L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/fiord', pane: 'base', attribution: 'OpenFreeMap © OpenMapTiles · © OpenStreetMap · RainViewer' }).addTo(map);
   L.marker(c, { icon: L.divIcon({ className: '', html: '<div class="home-pin"></div>', iconSize: [12, 12] }), interactive: false, keyboard: false }).addTo(map);
   loadRadar();
   setInterval(loadRadar, 10 * 60 * 1000);
@@ -112,7 +113,7 @@ function loadRadar() {
       layers.forEach(function (l) { map.removeLayer(l); });
       frames = past; layers = [];
       past.forEach(function (f) {
-        var l = L.tileLayer(j.host + f.path + '/256/{z}/{x}/{y}/2/1_1.png', { opacity: 0, maxNativeZoom: 7, maxZoom: 12, zIndex: 300 });
+        var l = L.tileLayer(j.host + f.path + '/256/{z}/{x}/{y}/2/1_1.png', { opacity: 0, maxNativeZoom: 7, className: 'radar', maxZoom: 12, zIndex: 300 });
         l.addTo(map); layers.push(l);
       });
       var ticks = document.getElementById('ticks');
@@ -132,7 +133,7 @@ function loadRadar() {
 }
 
 function show(i) {
-  layers.forEach(function (l, k) { l.setOpacity(k === i ? 0.82 : 0); });
+  layers.forEach(function (l, k) { l.setOpacity(k === i ? 0.9 : 0); });
   var t = new Date(frames[i].time * 1000);
   document.getElementById('rt').textContent = ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2);
   var mins = Math.round((Date.now() - t) / 60000);
