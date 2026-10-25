@@ -112,6 +112,27 @@ final class HaStrip {
         }
     }
 
+    /** The screensaver line ("dream" in ha_tiles.json), or "" when the file is missing, stale or has none. */
+    static String dreamLine(Context ctx) {
+        try {
+            File dir = Config.dir(ctx);
+            File file = dir != null ? new File(dir, FILE_NAME) : null;
+            if (file == null || !file.isFile() || file.length() > MAX_BYTES) return "";
+            if (System.currentTimeMillis() - file.lastModified() > STALE_MS) return "";
+            byte[] buf = new byte[(int) file.length()];
+            int n = 0;
+            try (InputStream in = new FileInputStream(file)) {
+                int r;
+                while (n < buf.length && (r = in.read(buf, n, buf.length - n)) > 0) n += r;
+            }
+            String text = new String(buf, 0, n, StandardCharsets.UTF_8);
+            if (text.startsWith("\uFEFF")) text = text.substring(1);
+            return clean(new JSONObject(text).optString("dream", ""), 90);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     /** Focuses the first clickable tile; false when there is none (row hidden or read-only). */
     boolean focusFirst() {
         if (strip.getVisibility() != View.VISIBLE) return false;

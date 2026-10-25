@@ -7,13 +7,15 @@ import android.os.Handler;
 import android.os.Looper;
 import android.service.dreams.DreamService;
 import android.view.View;
+import android.widget.TextView;
 
 import java.util.Random;
 
 /**
  * Screensaver: the launcher's thin clock and date on black, over a slow ambient glow.
  * Every minute the clock drifts to a new spot and the glow shifts colour, so nothing burns in.
- * No network, no images: cheap enough for a 1 GB TV.
+ * No network, no images: cheap enough for a 1 GB TV. Under the date, one line from Home Assistant
+ * ("dream" in ha_tiles.json, see HaStrip), refreshed with every move.
  */
 public class ClockDream extends DreamService {
 
@@ -24,6 +26,7 @@ public class ClockDream extends DreamService {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Random random = new Random();
     private View content;
+    private TextView haLine;
     private GradientDrawable glow;
     private int colorIndex;
     private int glowColor;
@@ -46,6 +49,8 @@ public class ClockDream extends DreamService {
         setContentView(R.layout.dream_clock);
 
         content = findViewById(R.id.dreamContent);
+        haLine = findViewById(R.id.dreamHa);
+        updateHa();
         View ambient = findViewById(R.id.dreamAmbient);
         glow = new GradientDrawable();
         glow.setGradientType(GradientDrawable.RADIAL_GRADIENT);
@@ -81,6 +86,7 @@ public class ClockDream extends DreamService {
 
     private void moveClock() {
         content.animate().alpha(0f).setDuration(900).withEndAction(() -> {
+            updateHa();
             placeClock();
             content.animate().alpha(1f).setDuration(1200).start();
         }).start();
@@ -99,6 +105,13 @@ public class ClockDream extends DreamService {
             glow.setGradientCenter((x + content.getWidth() / 2f) / parent.getWidth(),
                     (y + content.getHeight() / 2f) / parent.getHeight());
         }
+    }
+
+    private void updateHa() {
+        if (haLine == null) return;
+        String line = HaStrip.dreamLine(this);
+        haLine.setText(line);
+        haLine.setVisibility(line.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     private void shiftGlow() {

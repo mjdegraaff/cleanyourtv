@@ -7,7 +7,6 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
-import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -50,7 +49,7 @@ public class HaDetailActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        // No FLAG_KEEP_SCREEN_ON: a detail screen left open must still let the screensaver and sleep start.
         String screen = getIntent().getStringExtra(EXTRA_SCREEN);
         index = Math.max(0, SCREENS.indexOf(screen));
 

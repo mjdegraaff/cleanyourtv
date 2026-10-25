@@ -58,5 +58,18 @@
             android:fontFamily="@font/outfit_regular"
             android:letterSpacing="0.14"
             android:textAllCaps="true" />
+
+        <!-- One line from Home Assistant ("dream" in ha_tiles.json), gone while there is none or it is stale. -->
+        <TextView
+            android:id="@+id/dreamHa"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_marginTop="14dp"
+            android:textColor="#B3FFFFFF"
+            android:textSize="20sp"
+            android:fontFamily="@font/outfit_regular"
+            android:singleLine="true"
+            android:visibility="gone" />
     </LinearLayout>
 </FrameLayout>
