@@ -293,7 +293,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnWifi = findViewById(R.id.btnWifi);
         shamsiDate = findViewById(R.id.shamsiDate);
         stats = findViewById(R.id.stats);
-        haStrip = new HaStrip(this, findViewById(R.id.haStrip));
+        haStrip = new HaStrip(this, findViewById(R.id.haStrip),
+                () -> focusTile(lastFocused % COLUMNS), advancedEffects);
         showStats = cfg.showStats;
         shamsi = cfg.shamsiDate;
         greetingName = cfg.greetingName;
@@ -461,7 +462,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
             if (keyCode == KeyEvent.KEYCODE_DPAD_UP) return true;
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                // Back to the dock tile Up came from, not wherever the focus finder lands.
+                // Into the Home Assistant row when it has a clickable tile, else back to the dock tile
+                // Up came from, not wherever the focus finder lands.
+                if (haStrip != null && haStrip.focusFirst()) return true;
                 focusTile(lastFocused % COLUMNS);
                 return true;
             }

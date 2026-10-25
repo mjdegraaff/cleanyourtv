@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Energie</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  .top { display: grid; grid-template-columns: 1.05fr 1fr; gap: calc(var(--u) * 1.4); flex: 0 0 auto; }
+  .bottom { display: grid; grid-template-columns: 1.6fr 1fr; gap: calc(var(--u) * 1.4); flex: 1; min-height: 0; }
+
+  /* Live flow: sun and grid feed the house. */
+  .flow { padding: calc(var(--u) * 1.1) calc(var(--u) * 1.4); }
+  .flow svg { width: 100%; height: calc(var(--u) * 15.5); display: block; }
+  .flow .node-v { font-weight: 300; font-size: calc(var(--u) * 2.1); fill: #fff; }
+  .flow .node-l { font-size: calc(var(--u) * .8); letter-spacing: .16em; fill: rgba(255,255,255,.5); text-transform: uppercase; font-weight: 500; }
+  .flow .node-s { font-size: calc(var(--u) * .85); fill: rgba(255,255,255,.62); }
+  .pipe { fill: none; stroke-width: 3; stroke-linecap: round; opacity: .25; }
+  .pipe.live { opacity: 1; stroke-dasharray: 2 10; animation: run 1.1s linear infinite; }
+  .pipe.rev { animation-direction: reverse; }
+  @keyframes run { to { stroke-dashoffset: -24; } }
+
+  .today { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--u) * 1); }
+  .today .card { padding: calc(var(--u) * 1) calc(var(--u) * 1.3); }
+  .today .big { font-size: calc(var(--u) * 2.2); }
+  .dot { display: inline-block; width: calc(var(--u) * .6); height: calc(var(--u) * .6); border-radius: 50%; margin-right: calc(var(--u) * .45); vertical-align: middle; }
+  .ring { position: absolute; right: calc(var(--u) * 1.1); top: 50%; transform: translateY(-50%); width: calc(var(--u) * 4.2); height: calc(var(--u) * 4.2); }
+
+  .chart { display: flex; flex-direction: column; min-height: 0; }
+  .chart .head { display: flex; align-items: baseline; gap: calc(var(--u) * 1.2); }
+  .chart .legend { margin-left: auto; display: flex; gap: calc(var(--u) * 1.1); color: var(--text-2); font-size: calc(var(--u) * .85); }
+  .chart svg { flex: 1; width: 100%; min-height: 0; margin-top: calc(var(--u) * .6); }
+  .axis { font-size: calc(var(--u) * .72); fill: rgba(255,255,255,.42); }
+  .gridline { stroke: rgba(255,255,255,.08); stroke-width: 1; }
+  .zero { stroke: rgba(255,255,255,.28); stroke-width: 1; }
+</style>
+</head>
+<body data-screen="energy">
+<div class="screen">
+  <header>
+    <h1>Energie</h1>
+    <span class="meta" id="meta"></span>
+    <span class="spacer"></span>
+    <div class="nav" id="nav"></div>
+  </header>
+
+  <div class="top">
+    <div class="card flow">
+      <div class="label">Nu</div>
+      <svg id="flow" viewBox="0 0 520 160" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div class="today">
+      <div class="card"><div class="label"><span class="dot" style="background:var(--sun)"></span>Zon vandaag</div><div class="big" id="tSol"></div><div class="sub" id="tSolSub"></div></div>
+      <div class="card"><div class="label"><span class="dot" style="background:var(--home)"></span>Verbruik vandaag</div><div class="big" id="tUse"></div><div class="sub" id="tUseSub"></div><svg class="ring" id="ring" viewBox="0 0 42 42"></svg></div>
+      <div class="card"><div class="label"><span class="dot" style="background:var(--grid)"></span>Van het net</div><div class="big" id="tImp"></div><div class="sub" id="tImpSub"></div></div>
+      <div class="card"><div class="label"><span class="dot" style="background:var(--export)"></span>Teruggeleverd</div><div class="big" id="tExp"></div><div class="sub" id="tExpSub"></div></div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="card chart">
+      <div class="head"><div class="label">Vandaag per uur</div>
+        <div class="legend"><span><span class="dot" style="background:var(--sun)"></span>zon gebruikt</span><span><span class="dot" style="background:var(--grid)"></span>van net</span><span><span class="dot" style="background:var(--export)"></span>terug</span></div></div>
+      <svg id="hours" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card chart">
+      <div class="head"><div class="label">Afgelopen 7 dagen</div>
+        <div class="legend"><span><span class="dot" style="background:var(--home)"></span>verbruik</span><span><span class="dot" style="background:var(--sun)"></span>zon</span></div></div>
+      <svg id="days" preserveAspectRatio="none"></svg>
+    </div>
+  </div>
+</div>
+<div class="stale">Gegevens zijn ouder dan een kwartier</div>
+<div class="empty"><b>Nog geen energiegegevens</b>Home Assistant stuurt ze binnen een paar minuten.</div>
+
+<script src="common.js"></script>
+<script>
+var NS = 'http://www.w3.org/2000/svg';
+HA.nav(document.getElementById('nav'));
+
+function el(tag, attrs, text) {
+  var e = document.createElementNS(NS, tag);
+  for (var k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function kwh(v, dec) { return HA.num(v, dec === undefined ? (v < 10 ? 1 : 0) : dec) + '<small>kWh</small>'; }
+function plainW(w) { w = Math.abs(w || 0); return w >= 1000 ? HA.num(w / 1000, 1) + ' kW' : HA.num(w) + ' W'; }
+
+function drawFlow(now) {
+  var svg = document.getElementById('flow');
+  svg.innerHTML = '';
+  var sol = Math.max(0, now.solar || 0), grid = now.grid || 0;   // grid > 0: import, < 0: export
+  var house = Math.max(0, sol + grid);
+  var cs = getComputedStyle(document.documentElement);
+  var cSun = cs.getPropertyValue('--sun').trim(), cGrid = cs.getPropertyValue('--grid').trim(),
+      cExp = cs.getPropertyValue('--export').trim(), cHome = cs.getPropertyValue('--home').trim();
+
+  // pipes: sun -> house, grid <-> house, sun -> grid (export)
+  var pS = el('path', { d: 'M110 40 C 230 40, 260 80, 380 80', class: 'pipe' + (sol > 20 ? ' live' : ''), stroke: cSun });
+  var gColor = grid < -20 ? cExp : cGrid;
+  var pG = el('path', { d: 'M110 120 C 230 120, 260 80, 380 80', class: 'pipe' + (Math.abs(grid) > 20 ? ' live' : '') + (grid < -20 ? ' rev' : ''), stroke: gColor });
+  svg.appendChild(pS); svg.appendChild(pG);
+
+  function node(x, y, color, label, value, sub, anchor) {
+    svg.appendChild(el('circle', { cx: x, cy: y, r: 9, fill: color }));
+    svg.appendChild(el('circle', { cx: x, cy: y, r: 17, fill: 'none', stroke: color, 'stroke-opacity': .35, 'stroke-width': 2 }));
+    var tx = anchor === 'end' ? x - 30 : x + 30;
+    svg.appendChild(el('text', { x: tx, y: y - 16, class: 'node-l', 'text-anchor': anchor }, label));
+    svg.appendChild(el('text', { x: tx, y: y + 12, class: 'node-v', 'text-anchor': anchor }, value));
+    if (sub) svg.appendChild(el('text', { x: tx, y: y + 30, class: 'node-s', 'text-anchor': anchor }, sub));
+  }
+  node(92, 40, cSun, 'Zon', plainW(sol), sol > 20 ? 'wordt opgewekt' : 'geen opwek', 'end');
+  node(92, 120, gColor, 'Net', plainW(grid), grid < -20 ? 'teruglevering' : grid > 20 ? 'afname' : 'in balans', 'end');
+  node(398, 80, cHome, 'Huis', plainW(house), 'verbruik nu', 'start');
+}
+
+function ring(pct) {
+  var svg = document.getElementById('ring');
+  svg.innerHTML = '';
+  var r = 17, c = 2 * Math.PI * r, p = Math.max(0, Math.min(1, pct));
+  svg.appendChild(el('circle', { cx: 21, cy: 21, r: r, fill: 'none', stroke: 'rgba(255,255,255,.12)', 'stroke-width': 4 }));
+  svg.appendChild(el('circle', { cx: 21, cy: 21, r: r, fill: 'none', stroke: getComputedStyle(document.documentElement).getPropertyValue('--sun'), 'stroke-width': 4,
+    'stroke-dasharray': (c * p) + ' ' + c, 'stroke-linecap': 'round', transform: 'rotate(-90 21 21)' }));
+  svg.appendChild(el('text', { x: 21, y: 24.5, 'text-anchor': 'middle', fill: '#fff', 'font-size': 10 }, Math.round(p * 100) + '%'));
+}
+
+// Bars in a box measured in pixels, so text never stretches.
+function box(svg) {
+  var r = svg.getBoundingClientRect();
+  svg.setAttribute('viewBox', '0 0 ' + r.width + ' ' + r.height);
+  svg.innerHTML = '';
+  return { w: r.width, h: r.height };
+}
+function niceMax(v) {
+  if (v <= 0) return 1;
+  var steps = [0.2, 0.5, 1, 2, 3, 5, 10, 20, 30, 50, 100];
+  for (var i = 0; i < steps.length; i++) if (v <= steps[i]) return steps[i];
+  return Math.ceil(v / 50) * 50;
+}
+
+function drawHours(list) {
+  // list: [{h: local hour, imp, exp, sol}]; the clock-change hour can appear twice, so add them up.
+  var hours = [];
+  list.forEach(function (x) {
+    var k = x.h, o = hours[k] || (hours[k] = { imp: 0, exp: 0, sol: 0 });
+    o.imp += x.imp || 0; o.exp += x.exp || 0; o.sol += x.sol || 0;
+  });
+  var svg = document.getElementById('hours'), b = box(svg), cs = getComputedStyle(document.documentElement);
+  var left = 34, right = 6, top = 6, bottom = 20;
+  var W = b.w - left - right, H = b.h - top - bottom;
+  var up = 0, down = 0;
+  hours.forEach(function (x) { if (!x) return; up = Math.max(up, (x.imp || 0) + Math.max(0, (x.sol || 0) - (x.exp || 0))); down = Math.max(down, x.exp || 0); });
+  var max = niceMax(Math.max(up, down * 1.0, 0.4));
+  var downMax = down > 0 ? niceMax(down) : 0;
+  var total = max + downMax;
+  var zeroY = top + H * (max / total);
+  var scale = H / total;
+  [max, max / 2].forEach(function (v) {
+    var y = zeroY - v * scale;
+    svg.appendChild(el('line', { x1: left, x2: b.w - right, y1: y, y2: y, class: 'gridline' }));
+    svg.appendChild(el('text', { x: left - 6, y: y + 4, 'text-anchor': 'end', class: 'axis' }, HA.num(v, v < 1 ? 1 : 0)));
+  });
+  if (downMax) {
+    var yd = zeroY + downMax * scale;
+    svg.appendChild(el('text', { x: left - 6, y: yd, 'text-anchor': 'end', class: 'axis' }, '-' + HA.num(downMax, downMax < 1 ? 1 : 0)));
+  }
+  svg.appendChild(el('text', { x: 2, y: top + 9, class: 'axis' }, 'kWh'));
+  var slot = W / 24, bw = Math.max(2, slot * 0.62), now = new Date().getHours();
+  for (var h = 0; h < 24; h++) {
+    var x = left + h * slot + (slot - bw) / 2;
+    var d = hours[h];
+    if (d) {
+      var own = Math.max(0, (d.sol || 0) - (d.exp || 0)), imp = d.imp || 0, exp = d.exp || 0;
+      var y = zeroY;
+      if (own > 0) { y -= own * scale; svg.appendChild(el('rect', { x: x, y: y, width: bw, height: own * scale, rx: 2, fill: cs.getPropertyValue('--sun') })); }
+      if (imp > 0) { var hh = imp * scale; svg.appendChild(el('rect', { x: x, y: y - hh, width: bw, height: hh, rx: 2, fill: cs.getPropertyValue('--grid') })); }
+      if (exp > 0) svg.appendChild(el('rect', { x: x, y: zeroY, width: bw, height: exp * scale, rx: 2, fill: cs.getPropertyValue('--export') }));
+    }
+    if (h % 3 === 0) svg.appendChild(el('text', { x: left + h * slot + slot / 2, y: b.h - 4, 'text-anchor': 'middle', class: 'axis' }, ('0' + h).slice(-2)));
+    if (h === now) svg.appendChild(el('rect', { x: left + h * slot, y: top, width: slot, height: H, fill: 'rgba(255,255,255,.05)' }));
+  }
+  svg.appendChild(el('line', { x1: left, x2: b.w - right, y1: zeroY, y2: zeroY, class: 'zero' }));
+}
+
+function drawDays(days) {
+  var svg = document.getElementById('days'), b = box(svg), cs = getComputedStyle(document.documentElement);
+  var left = 30, right = 4, top = 6, bottom = 20;
+  var W = b.w - left - right, H = b.h - top - bottom;
+  var max = 0;
+  days.forEach(function (d) { max = Math.max(max, d.use || 0, d.sol || 0); });
+  max = niceMax(Math.max(max, 1));
+  var base = top + H, scale = H / max;
+  [max, max / 2].forEach(function (v) {
+    var y = base - v * scale;
+    svg.appendChild(el('line', { x1: left, x2: b.w - right, y1: y, y2: y, class: 'gridline' }));
+    svg.appendChild(el('text', { x: left - 6, y: y + 4, 'text-anchor': 'end', class: 'axis' }, HA.num(v)));
+  });
+  var slot = W / Math.max(1, days.length), bw = slot * 0.3;
+  days.forEach(function (d, i) {
+    var cx = left + i * slot + slot / 2;
+    var hu = (d.use || 0) * scale, hs = (d.sol || 0) * scale;
+    svg.appendChild(el('rect', { x: cx - bw - 1.5, y: base - hu, width: bw, height: hu, rx: 2, fill: cs.getPropertyValue('--home'), 'fill-opacity': .85 }));
+    svg.appendChild(el('rect', { x: cx + 1.5, y: base - hs, width: bw, height: hs, rx: 2, fill: cs.getPropertyValue('--sun') }));
+    svg.appendChild(el('text', { x: cx, y: b.h - 4, 'text-anchor': 'middle', class: 'axis', 'font-weight': i === days.length - 1 ? 600 : 400 }, d.d));
+  });
+  svg.appendChild(el('line', { x1: left, x2: b.w - right, y1: base, y2: base, class: 'zero' }));
+}
+
+function render(data) {
+  var e = data.energy || {}, now = e.now || {}, t = e.today || {};
+  document.getElementById('meta').textContent = data.updated ? 'bijgewerkt ' + HA.time(data.updated) : '';
+  drawFlow(now);
+  var sol = t.solar || 0, imp = t.import || 0, exp = t.export || 0;
+  var use = Math.max(0, imp + sol - exp), own = Math.max(0, sol - exp);
+  document.getElementById('tSol').innerHTML = kwh(sol);
+  document.getElementById('tSolSub').textContent = sol > 0 ? HA.num(own, 1) + ' kWh zelf gebruikt' : 'nog geen opwek';
+  document.getElementById('tUse').innerHTML = kwh(use);
+  document.getElementById('tUseSub').textContent = use > 0 ? 'zelfvoorzienend' : '';
+  ring(use > 0 ? own / use : 0);
+  document.getElementById('tImp').innerHTML = kwh(imp);
+  document.getElementById('tImpSub').textContent = t.gas !== undefined && t.gas !== null ? 'gas ' + HA.num(t.gas, 2) + ' m³' : '';
+  document.getElementById('tExp').innerHTML = kwh(exp);
+  document.getElementById('tExpSub').textContent = sol > 0 ? HA.num(Math.min(100, exp / sol * 100)) + '% van de opwek' : '';
+  drawHours(e.hours || []);
+  drawDays(e.days || []);
+}
+HA.start(render);
+</script>
+</body>
+</html>

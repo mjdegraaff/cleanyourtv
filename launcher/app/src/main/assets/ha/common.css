@@ -1,0 +1,63 @@
+/* Shared look for the Home Assistant detail screens: the launcher's night glass, sized for a TV.
+   Everything scales with the viewport width, so 720p, 1080p and 4K boxes look the same. */
+@font-face { font-family: Outfit; src: url(outfit.ttf); font-weight: 100 900; }
+
+:root {
+  --bg: #070A14;
+  --glass: rgba(255,255,255,.07);
+  --glass-2: rgba(255,255,255,.11);
+  --line: rgba(255,255,255,.13);
+  --text: #fff;
+  --text-2: rgba(255,255,255,.66);
+  --text-3: rgba(255,255,255,.42);
+  --sun: #FFC94D;
+  --grid: #6EA8FF;
+  --export: #6FD3A6;
+  --home: #E9EEF8;
+  --gas: #FF9E6B;
+  --michiel: #8FB8FF;
+  --anne: #F5A3C7;
+  --rain: #7CC7FF;
+  --u: 1vw;   /* 1/100 of the screen width */
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body {
+  background: radial-gradient(120% 90% at 15% 0%, #16203A 0%, #0B1122 45%, var(--bg) 100%);
+  color: var(--text);
+  font-family: Outfit, sans-serif;
+  font-weight: 400;
+  font-size: calc(var(--u) * 1.15);
+  -webkit-font-smoothing: antialiased;
+}
+
+.screen { position: absolute; inset: 0; padding: calc(var(--u) * 2.6) calc(var(--u) * 3.2) calc(var(--u) * 2.2); display: flex; flex-direction: column; gap: calc(var(--u) * 1.4); }
+
+header { display: flex; align-items: baseline; gap: calc(var(--u) * 1.6); }
+header h1 { font-weight: 300; font-size: calc(var(--u) * 2.9); letter-spacing: -.01em; }
+header .meta { color: var(--text-3); font-size: calc(var(--u) * 1.05); }
+header .spacer { flex: 1; }
+
+.nav { display: flex; align-items: center; gap: calc(var(--u) * .7); color: var(--text-3); font-size: calc(var(--u) * .95); }
+.nav .tab { padding: calc(var(--u) * .35) calc(var(--u) * 1); border-radius: 999px; border: 1px solid transparent; }
+.nav .tab.on { color: #111; background: rgba(255,255,255,.95); }
+.nav .arrow { opacity: .55; font-size: calc(var(--u) * .9); }
+
+.card { background: linear-gradient(180deg, var(--glass-2), var(--glass)); border: 1px solid var(--line); border-radius: calc(var(--u) * 1.3); padding: calc(var(--u) * 1.3) calc(var(--u) * 1.5); position: relative; overflow: hidden; }
+.label { text-transform: uppercase; letter-spacing: .16em; font-size: calc(var(--u) * .78); font-weight: 500; color: var(--text-3); }
+.big { font-weight: 300; font-size: calc(var(--u) * 2.6); line-height: 1.05; font-variant-numeric: tabular-nums; }
+.big small { font-size: .45em; color: var(--text-2); margin-left: .2em; font-weight: 400; }
+.sub { color: var(--text-2); font-size: calc(var(--u) * .95); margin-top: calc(var(--u) * .25); }
+
+.stale { position: absolute; left: 50%; bottom: calc(var(--u) * 1.2); transform: translateX(-50%); background: rgba(255,170,80,.18); border: 1px solid rgba(255,170,80,.5); color: #FFD2A8; padding: calc(var(--u) * .4) calc(var(--u) * 1.2); border-radius: 999px; font-size: calc(var(--u) * .9); display: none; z-index: 1000; }
+.stale.show { display: block; }
+
+.empty { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: calc(var(--u) * .6); color: var(--text-2); text-align: center; z-index: 999; background: var(--bg); }
+.empty.show { display: flex; }
+.empty b { font-weight: 300; font-size: calc(var(--u) * 2); color: var(--text); }
+
+/* Leaflet on a TV: no controls, dark tiles, attribution kept but quiet. */
+.leaflet-container { background: #0B1020; font-family: Outfit, sans-serif; }
+.leaflet-control-attribution { background: rgba(7,10,20,.55) !important; color: rgba(255,255,255,.45) !important; font-size: calc(var(--u) * .62) !important; }
+.leaflet-control-attribution a { color: rgba(255,255,255,.6) !important; }

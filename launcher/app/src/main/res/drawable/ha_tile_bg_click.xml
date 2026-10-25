@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Clickable Home Assistant tile: white when focused (like a top-bar pill), otherwise the calm tile glass. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#F5FFFFFF" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#D9FFFFFF" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+    <item android:drawable="@drawable/ha_tile_bg" />
+</selector>

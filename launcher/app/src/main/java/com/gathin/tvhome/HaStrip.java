@@ -1,12 +1,15 @@
 package com.gathin.tvhome;
 
 import android.content.Context;
+import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -31,11 +34,14 @@ import java.nio.charset.StandardCharsets;
  * <pre>
  * {"tiles": [
  *   {"label": "Persoon", "value": "Thuis", "sub": "sinds 18:02", "accent": "#7FD1AE"},
- *   {"label": "Zon vandaag", "value": "8,2 kWh"}
+ *   {"label": "Zon vandaag", "value": "8,2 kWh", "open": "energy"}
  * ]}
  * </pre>
  *
- * Tiles are not focusable: the row is a glance, D-pad navigation stays exactly as it was.
+ * A tile without {@code open} is a read-only glance and takes no focus. A tile with {@code open}
+ * (energy, weather or map) is focusable: OK opens {@link HaDetailActivity} on that screen, Down goes
+ * back to the dock, Up to the top bar. Values are updated in place, so a focused tile keeps focus
+ * while the minute push replaces the file.
  */
 final class HaStrip {
     private static final String TAG = "TvHome.HaStrip";
@@ -45,15 +51,26 @@ final class HaStrip {
     private static final int MAX_BYTES = 16 * 1024;
     private static final int MAX_TILES = 8;
 
+    /** What the strip needs from Home: where Down goes. */
+    interface Host {
+        void focusDockFromStrip();
+    }
+
     private final Context ctx;
+    private final Host host;
+    private final boolean scaleOnFocus;
     private final LinearLayout strip;
+    /** Signature of the shown tiles (count + open targets): same signature, update texts in place. */
+    private String shownShape = "";
     private final float density;
     private final Typeface medium;
     private final Typeface regular;
     private long shownModified = -1;
 
-    HaStrip(Context ctx, LinearLayout strip) {
+    HaStrip(Context ctx, LinearLayout strip, Host host, boolean scaleOnFocus) {
         this.ctx = ctx;
+        this.host = host;
+        this.scaleOnFocus = scaleOnFocus;
         this.strip = strip;
         this.density = ctx.getResources().getDisplayMetrics().density;
         Typeface m = null, r = null;
@@ -95,8 +112,19 @@ final class HaStrip {
         }
     }
 
+    /** Focuses the first clickable tile; false when there is none (row hidden or read-only). */
+    boolean focusFirst() {
+        if (strip.getVisibility() != View.VISIBLE) return false;
+        for (int i = 0; i < strip.getChildCount(); i++) {
+            View c = strip.getChildAt(i);
+            if (c.isFocusable()) return c.requestFocus();
+        }
+        return false;
+    }
+
     private void hide() {
         shownModified = -1;
+        shownShape = "";
         if (strip.getVisibility() != View.GONE) {
             strip.removeAllViews();
             strip.setVisibility(View.GONE);
@@ -120,28 +148,75 @@ final class HaStrip {
     }
 
     private void build(JSONArray tiles) {
-        strip.removeAllViews();
         int count = Math.min(tiles.length(), MAX_TILES);
+        java.util.List<JSONObject> list = new java.util.ArrayList<>();
+        StringBuilder shape = new StringBuilder();
         for (int i = 0; i < count; i++) {
             JSONObject t = tiles.optJSONObject(i);
-            if (t == null) continue;
-            String label = clean(t.optString("label", ""), 24);
-            String value = clean(t.optString("value", ""), 28);
-            if (value.isEmpty()) continue;
-            String sub = clean(t.optString("sub", ""), 40);
-            int accent = color(t.optString("accent", ""));
-            strip.addView(tile(label, value, sub, accent, i == 0));
+            if (t == null || clean(t.optString("value", ""), 28).isEmpty()) continue;
+            list.add(t);
+            shape.append(target(t)).append('|');
         }
+        if (shape.toString().equals(shownShape) && strip.getChildCount() == list.size()) {
+            for (int i = 0; i < list.size(); i++) fill((LinearLayout) strip.getChildAt(i), list.get(i));
+            return;
+        }
+        View focused = strip.findFocus();
+        int focusIndex = focused != null ? strip.indexOfChild(focused) : -1;
+        strip.removeAllViews();
+        for (int i = 0; i < list.size(); i++) {
+            LinearLayout box = tile(target(list.get(i)), i == 0);
+            fill(box, list.get(i));
+            strip.addView(box);
+        }
+        shownShape = shape.toString();
         strip.setVisibility(strip.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+        if (focusIndex >= 0) {
+            if (focusIndex < strip.getChildCount() && strip.getChildAt(focusIndex).isFocusable()) {
+                strip.getChildAt(focusIndex).requestFocus();
+            } else if (!focusFirst()) {
+                host.focusDockFromStrip();
+            }
+        }
     }
 
-    private View tile(String label, String value, String sub, int accent, boolean first) {
+    /** The detail screen a tile opens, or "" for a read-only tile. Only known screens count. */
+    private static String target(JSONObject t) {
+        String open = t.optString("open", "");
+        return HaDetailActivity.isScreen(open) ? open : "";
+    }
+
+    private void fill(LinearLayout box, JSONObject t) {
+        String label = clean(t.optString("label", ""), 24);
+        String value = clean(t.optString("value", ""), 28);
+        String sub = clean(t.optString("sub", ""), 40);
+        int accent = color(t.optString("accent", ""));
+        boolean clickable = box.isFocusable();
+        TextView l = (TextView) box.getChildAt(0), v = (TextView) box.getChildAt(1), s = (TextView) box.getChildAt(2);
+        l.setText(label);
+        l.setVisibility(label.isEmpty() ? View.GONE : View.VISIBLE);
+        l.setTextColor(states(accent != 0 ? accent : 0x8CFFFFFF, 0xB3111111, clickable));
+        v.setText(value);
+        s.setText(sub);
+        s.setVisibility(sub.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    /** Text colour that turns dark on the white focused tile. */
+    private static ColorStateList states(int normal, int focused, boolean clickable) {
+        if (!clickable) return ColorStateList.valueOf(normal);
+        return new ColorStateList(new int[][]{{android.R.attr.state_focused}, {}}, new int[]{focused, normal});
+    }
+
+    private LinearLayout tile(String open, boolean first) {
+        boolean clickable = !open.isEmpty();
         LinearLayout box = new LinearLayout(ctx);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setGravity(Gravity.CENTER_VERTICAL);
-        box.setBackgroundResource(R.drawable.ha_tile_bg);
-        box.setFocusable(false);
-        box.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        box.setBackgroundResource(clickable ? R.drawable.ha_tile_bg_click : R.drawable.ha_tile_bg);
+        box.setFocusable(clickable);
+        box.setClickable(clickable);
+        box.setImportantForAccessibility(clickable ? View.IMPORTANT_FOR_ACCESSIBILITY_YES
+                : View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         int padH = dp(16), padV = dp(10);
         box.setPadding(padH, padV, padH, padV);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0,
@@ -149,33 +224,66 @@ final class HaStrip {
         lp.setMarginStart(first ? dp(12) : dp(10));
         box.setLayoutParams(lp);
 
-        if (!label.isEmpty()) {
-            TextView l = text(label, 11, medium, accent != 0 ? accent : 0x8CFFFFFF);
-            l.setAllCaps(true);
-            l.setLetterSpacing(0.18f);
-            box.addView(l);
-        }
-        TextView v = text(value, 21, regular, 0xFFFFFFFF);
+        TextView l = text(11, medium);
+        l.setAllCaps(true);
+        l.setLetterSpacing(0.18f);
+        box.addView(l);
+        TextView v = text(21, regular);
+        v.setTextColor(states(0xFFFFFFFF, 0xFF111111, clickable));
         v.setPadding(0, dp(2), 0, 0);
         box.addView(v);
-        if (!sub.isEmpty()) {
-            TextView s = text(sub, 12, regular, 0xA6FFFFFF);
-            s.setPadding(0, dp(1), 0, 0);
-            box.addView(s);
+        TextView s = text(12, regular);
+        s.setTextColor(states(0xA6FFFFFF, 0x99111111, clickable));
+        s.setPadding(0, dp(1), 0, 0);
+        box.addView(s);
+
+        if (clickable) {
+            box.setOnClickListener(x -> {
+                Intent i = new Intent(ctx, HaDetailActivity.class).putExtra(HaDetailActivity.EXTRA_SCREEN, open);
+                try {
+                    ctx.startActivity(i);
+                } catch (Exception e) {
+                    Log.w(TAG, "open " + open + " failed: " + e.getMessage());
+                }
+            });
+            box.setOnKeyListener((x, keyCode, event) -> {
+                if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+                if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                    host.focusDockFromStrip();
+                    return true;
+                }
+                if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                    // Stay in the row at its ends; skip read-only tiles in between.
+                    int dir = (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) != (strip.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) ? 1 : -1;
+                    for (int j = strip.indexOfChild(x) + dir; j >= 0 && j < strip.getChildCount(); j += dir) {
+                        if (strip.getChildAt(j).isFocusable()) {
+                            strip.getChildAt(j).requestFocus();
+                            x.playSoundEffect(dir > 0 ? android.view.SoundEffectConstants.NAVIGATION_RIGHT
+                                    : android.view.SoundEffectConstants.NAVIGATION_LEFT);
+                            return true;
+                        }
+                    }
+                    return true;
+                }
+                return false;   // Up: the focus finder goes to the top bar
+            });
+            if (scaleOnFocus) {
+                box.setOnFocusChangeListener((x, focused) -> x.animate()
+                        .scaleX(focused ? 1.05f : 1f).scaleY(focused ? 1.05f : 1f).setDuration(160).start());
+            }
         }
         return box;
     }
 
-    private TextView text(String s, float sp, Typeface face, int color) {
+    private TextView text(float sp, Typeface face) {
         TextView tv = new TextView(ctx);
-        tv.setText(s);
         tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
-        tv.setTextColor(color);
         if (face != null) tv.setTypeface(face);
         tv.setSingleLine(true);
         tv.setEllipsize(TextUtils.TruncateAt.END);
         tv.setIncludeFontPadding(false);
         tv.setGravity(Gravity.LEFT);
+        tv.setDuplicateParentStateEnabled(true);
         return tv;
     }
 

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Locatie</title>
+<link rel="stylesheet" href="leaflet.css">
+<link rel="stylesheet" href="common.css">
+<style>
+  #map { position: absolute; inset: 0; }
+  .screen { pointer-events: none; background: linear-gradient(180deg, rgba(7,10,20,.85) 0%, rgba(7,10,20,0) 22%, rgba(7,10,20,0) 70%, rgba(7,10,20,.7) 100%); z-index: 600; }
+  .people { margin-top: auto; display: flex; gap: calc(var(--u) * 1.2); }
+  .person { min-width: calc(var(--u) * 20); display: flex; align-items: center; gap: calc(var(--u) * 1.1); background: rgba(10,14,28,.78); }
+  .avatar { width: calc(var(--u) * 3.6); height: calc(var(--u) * 3.6); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: calc(var(--u) * 1.5); color: #0B1020; flex: none; }
+  .person .place { font-size: calc(var(--u) * 1.6); font-weight: 300; }
+  .person .when { color: var(--text-2); font-size: calc(var(--u) * .95); margin-top: calc(var(--u) * .15); }
+
+  .pin { position: relative; width: 100%; height: 100%; }
+  .pin .c { position: absolute; inset: 0; border-radius: 50%; border: 3px solid #fff; display: flex; align-items: center; justify-content: center; font-family: Outfit, sans-serif; font-weight: 600; font-size: 17px; color: #0B1020; box-shadow: 0 4px 18px rgba(0,0,0,.55); }
+  .pin .pulse { position: absolute; inset: -10px; border-radius: 50%; animation: pulse 2.4s ease-out infinite; }
+  @keyframes pulse { 0% { transform: scale(.6); opacity: .7; } 100% { transform: scale(1.6); opacity: 0; } }
+  .home-ic { width: 100%; height: 100%; border-radius: 9px; background: rgba(255,255,255,.92); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 12px rgba(0,0,0,.5); }
+  .home-ic svg { width: 62%; height: 62%; }
+</style>
+</head>
+<body data-screen="map">
+<div id="map"></div>
+<div class="screen">
+  <header>
+    <h1>Locatie</h1>
+    <span class="meta" id="meta"></span>
+    <span class="spacer"></span>
+    <div class="nav" id="nav"></div>
+  </header>
+  <div class="people" id="people"></div>
+</div>
+<div class="stale">Gegevens zijn ouder dan een kwartier</div>
+<div class="empty"><b>Nog geen locaties</b>Home Assistant stuurt ze binnen een paar minuten.</div>
+
+<script src="leaflet.js"></script>
+<script src="common.js"></script>
+<script>
+HA.nav(document.getElementById('nav'));
+var map = L.map('map', { zoomControl: false, keyboard: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, touchZoom: false });
+map.attributionControl.setPrefix(false);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap · © CARTO' }).addTo(map);
+var layer = L.layerGroup().addTo(map), lastKey = '';
+
+function initials(n) { return (n || '?').trim().charAt(0).toUpperCase(); }
+function ago(iso) {
+  if (!iso) return '';
+  var m = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (isNaN(m)) return '';
+  if (m < 1) return 'zojuist';
+  if (m < 60) return m + ' min geleden';
+  var h = Math.floor(m / 60);
+  return h < 24 ? h + ' uur geleden' : HA.time(iso);
+}
+
+function since(iso) {
+  var d = new Date(iso);
+  if (isNaN(d)) return '';
+  var days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86400000);
+  var day = days === 0 ? '' : days === 1 ? 'gisteren ' : d.getDate() + '/' + (d.getMonth() + 1) + ' ';
+  return 'sinds ' + day + HA.time(iso);
+}
+
+function render(data) {
+  document.getElementById('meta').textContent = data.updated ? 'bijgewerkt ' + HA.time(data.updated) : '';
+  var people = (data.people || []).filter(function (p) { return p.lat && p.lon; });
+  var home = data.home;
+
+  document.getElementById('people').innerHTML = (data.people || []).map(function (p) {
+    return '<div class="card person"><div class="avatar" style="background:' + (p.color || '#fff') + '">' + initials(p.name) + '</div>'
+      + '<div><div class="label">' + p.name + '</div><div class="place">' + (p.place || '–') + '</div>'
+      + '<div class="when">' + [p.since ? since(p.since) : '', p.seen ? 'positie ' + ago(p.seen) : ''].filter(Boolean).join(' · ') + '</div></div></div>';
+  }).join('');
+
+  // Only redraw and refit the map when a position moved, so the picture stays calm.
+  var key = JSON.stringify(people.map(function (p) { return [p.lat.toFixed(4), p.lon.toFixed(4), p.acc]; }));
+  if (key === lastKey) return;
+  lastKey = key;
+  layer.clearLayers();
+  var pts = [];
+  if (home && home.lat) {
+    L.marker([home.lat, home.lon], { icon: L.divIcon({ className: '', iconSize: [30, 30], html: '<div class="home-ic"><svg viewBox="0 0 24 24"><path fill="#0B1020" d="M12 3 2 11h3v9h6v-6h2v6h6v-9h3z"/></svg></div>' }), interactive: false, keyboard: false, zIndexOffset: -100 }).addTo(layer);
+    pts.push([home.lat, home.lon]);
+  }
+  // Two people at the same spot: nudge the second pin a little so both stay visible.
+  people.forEach(function (p, i) {
+    var lat = p.lat, lon = p.lon;
+    for (var j = 0; j < i; j++) {
+      if (Math.abs(people[j].lat - lat) < 0.0004 && Math.abs(people[j].lon - lon) < 0.0004) lon += 0.0007;
+    }
+    if (p.acc && p.acc > 30 && p.acc < 3000) L.circle([p.lat, p.lon], { radius: p.acc, color: p.color, weight: 1, fillColor: p.color, fillOpacity: .12, interactive: false }).addTo(layer);
+    L.marker([lat, lon], { icon: L.divIcon({ className: '', iconSize: [40, 40], html: '<div class="pin"><div class="pulse" style="background:' + p.color + '"></div><div class="c" style="background:' + p.color + '">' + initials(p.name) + '</div></div>' }), interactive: false, keyboard: false }).addTo(layer);
+    pts.push([p.lat, p.lon]);
+  });
+  if (!pts.length) { map.setView([52.0, 5.46], 12); return; }
+  var b = L.latLngBounds(pts);
+  // Room for the header above and the cards below.
+  var h = window.innerHeight, w = window.innerWidth;
+  map.fitBounds(b, { paddingTopLeft: [w * 0.08, h * 0.2], paddingBottomRight: [w * 0.08, h * 0.32], maxZoom: 16 });
+}
+HA.start(render);
+</script>
+</body>
+</html>
