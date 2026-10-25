@@ -255,6 +255,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         density = getResources().getDisplayMetrics().density;
+        // After a reinstall: bring back tile order and App library choices from the external copy (StateBackup).
+        StateBackup.restoreIfMissing(this);
         // config.xml, overlaid by config.json from a pushed theme (see Config and tools/theme.sh).
         Config cfg = Config.load(this);
         settingsKeycodes = cfg.settingsKeycodes;
@@ -660,6 +662,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         ambient.animate().cancel();
         handler.removeCallbacks(minuteTick);
         handler.removeCallbacks(haTick);
+        StateBackup.save(this);
         stopStats();
         if (diya != null) diya.stop();
         cancelPendingFocusScroll();

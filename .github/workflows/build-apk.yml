@@ -17,6 +17,14 @@ jobs:
         with:
           packages: platforms;android-34 build-tools;34.0.0
       - uses: gradle/actions/setup-gradle@v4
+      - name: Throwaway signing key (never stored)
+        run: |
+          PW=$(openssl rand -hex 24)
+          echo "::add-mask::$PW"
+          echo "TVHOME_KEYSTORE_PASSWORD=$PW" >> "$GITHUB_ENV"
+          echo "TVHOME_KEYSTORE=$RUNNER_TEMP/ci.keystore" >> "$GITHUB_ENV"
+          keytool -genkeypair -keystore "$RUNNER_TEMP/ci.keystore" -storepass "$PW" -keypass "$PW" \
+            -alias tvhome -keyalg RSA -keysize 2048 -validity 3650 -dname "CN=tvhome" -noprompt
       - name: Build
         working-directory: launcher
         run: chmod +x gradlew && ./gradlew --no-daemon assembleRelease
