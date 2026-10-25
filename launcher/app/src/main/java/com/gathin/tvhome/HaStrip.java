@@ -30,7 +30,7 @@ import java.nio.charset.StandardCharsets;
  *
  * <pre>
  * {"tiles": [
- *   {"label": "Michiel", "value": "Thuis", "sub": "sinds 18:02", "accent": "#7FD1AE"},
+ *   {"label": "Persoon", "value": "Thuis", "sub": "sinds 18:02", "accent": "#7FD1AE"},
  *   {"label": "Zon vandaag", "value": "8,2 kWh"}
  * ]}
  * </pre>
