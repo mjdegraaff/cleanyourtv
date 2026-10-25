@@ -33,6 +33,12 @@
   .axis { font-size: calc(var(--u) * .72); fill: rgba(255,255,255,.42); }
   .gridline { stroke: rgba(255,255,255,.08); stroke-width: 1; }
   .zero { stroke: rgba(255,255,255,.28); stroke-width: 1; }
+  .zero.dash { stroke-dasharray: 3 4; }
+  .l-sun { fill: none; stroke: var(--sun); stroke-width: 2.2; stroke-linejoin: round; }
+  .a-sun { fill: var(--sun); fill-opacity: .22; stroke: none; }
+  .l-home { fill: none; stroke: var(--home); stroke-width: 2.4; stroke-linejoin: round; }
+  .l-grid { fill: none; stroke: var(--grid); stroke-width: 1.8; stroke-linejoin: round; opacity: .9; }
+  .nowline { stroke: rgba(255,255,255,.45); stroke-width: 1.2; stroke-dasharray: 3 4; }
 </style>
 </head>
 <body data-screen="energy">
@@ -47,7 +53,7 @@
   <div class="top">
     <div class="card flow">
       <div class="label">Nu</div>
-      <svg id="flow" viewBox="0 0 520 160" preserveAspectRatio="xMidYMid meet"></svg>
+      <svg id="flow" viewBox="-120 0 660 160" preserveAspectRatio="xMidYMid meet"></svg>
     </div>
     <div class="today">
       <div class="card"><div class="label"><span class="dot" style="background:var(--sun)"></span>Zon vandaag</div><div class="big" id="tSol"></div><div class="sub" id="tSolSub"></div></div>
@@ -59,8 +65,8 @@
 
   <div class="bottom">
     <div class="card chart">
-      <div class="head"><div class="label">Vandaag per uur</div>
-        <div class="legend"><span><span class="dot" style="background:var(--sun)"></span>zon gebruikt</span><span><span class="dot" style="background:var(--grid)"></span>van net</span><span><span class="dot" style="background:var(--export)"></span>terug</span></div></div>
+      <div class="head"><div class="label" id="hoursLbl">Vandaag</div>
+        <div class="legend" id="hoursLeg"></div></div>
       <svg id="hours" preserveAspectRatio="none"></svg>
     </div>
     <div class="card chart">
@@ -183,6 +189,50 @@ function drawHours(list) {
   svg.appendChild(el('line', { x1: left, x2: b.w - right, y1: zeroY, y2: zeroY, class: 'zero' }));
 }
 
+// Day curve, same as the Nest Hub: 5-minute averages of sun, house and grid (kW). series: [[slot, solarW, gridW], ...]
+function drawCurve(series) {
+  var svg = document.getElementById('hours'), b = box(svg);
+  var d0 = new Date(); d0.setHours(0, 0, 0, 0);
+  var d1 = new Date(d0); d1.setDate(d1.getDate() + 1);
+  var N = Math.max(288, Math.round((d1 - d0) / 300000));   // 300 slots on the clock-change day
+  var pts = series.filter(function (r) { return r && r[0] >= 0 && r[0] < N; }).sort(function (a, b2) { return a[0] - b2[0]; });
+  var vals = [];
+  pts.forEach(function (r) { var s = Math.max(0, r[1] || 0), g = r[2] || 0; r.s = s; r.g = g; r.h = Math.max(0, s + g); vals.push(s, g, r.h); });
+  var max = Math.max(1000, Math.max.apply(null, vals)), min = Math.min(0, Math.min.apply(null, vals));
+  var range = max - min, step = range <= 3000 ? 1000 : range <= 8000 ? 2000 : 5000;
+  max = Math.ceil(max / step) * step; min = Math.floor(min / step) * step;
+  var left = 34, right = 8, top = 8, bottom = 20;
+  var W = b.w - left - right, H = b.h - top - bottom;
+  function x(i) { return left + i / (N - 1) * W; }
+  function y(v) { return top + (max - v) / (max - min) * H; }
+  for (var v = min; v <= max; v += step) {
+    svg.appendChild(el('line', { x1: left, x2: b.w - right, y1: y(v), y2: y(v), class: v === 0 ? 'zero dash' : 'gridline' }));
+    svg.appendChild(el('text', { x: left - 6, y: y(v) + 4, 'text-anchor': 'end', class: 'axis' }, HA.num(v / 1000)));
+  }
+  svg.appendChild(el('text', { x: 2, y: top + 9, class: 'axis' }, 'kW'));
+  for (var h = 0; h <= 24; h += 3) {
+    svg.appendChild(el('text', { x: x(Math.min(N - 1, h * 12)), y: b.h - 4, 'text-anchor': h === 0 ? 'start' : h === 24 ? 'end' : 'middle', class: 'axis' }, ('0' + h).slice(-2) + ':00'));
+  }
+  // Lines break where the 5-minute statistics have a gap.
+  function path(key) {
+    var dd = '', prev = -2;
+    pts.forEach(function (r) { dd += (r[0] === prev + 1 ? 'L' : 'M') + x(r[0]).toFixed(1) + ',' + y(r[key]).toFixed(1); prev = r[0]; });
+    return dd;
+  }
+  if (pts.length) {
+    var area = '', seg = [];
+    function flush() { if (seg.length) { area += 'M' + x(seg[0][0]).toFixed(1) + ',' + y(0).toFixed(1); seg.forEach(function (r) { area += 'L' + x(r[0]).toFixed(1) + ',' + y(r.s).toFixed(1); }); area += 'L' + x(seg[seg.length - 1][0]).toFixed(1) + ',' + y(0).toFixed(1) + 'Z'; } seg = []; }
+    pts.forEach(function (r, k) { if (k && r[0] !== pts[k - 1][0] + 1) flush(); seg.push(r); });
+    flush();
+    svg.appendChild(el('path', { d: area, class: 'a-sun' }));
+    svg.appendChild(el('path', { d: path('s'), class: 'l-sun' }));
+    svg.appendChild(el('path', { d: path('g'), class: 'l-grid' }));
+    svg.appendChild(el('path', { d: path('h'), class: 'l-home' }));
+  }
+  var nowI = Math.min(N - 1, Math.floor((Date.now() - d0) / 300000));
+  svg.appendChild(el('line', { x1: x(nowI), x2: x(nowI), y1: top, y2: top + H, class: 'nowline' }));
+}
+
 function drawDays(days) {
   var svg = document.getElementById('days'), b = box(svg), cs = getComputedStyle(document.documentElement);
   var left = 30, right = 4, top = 6, bottom = 20;
@@ -222,7 +272,12 @@ function render(data) {
   document.getElementById('tImpSub').textContent = t.gas !== undefined && t.gas !== null ? 'gas ' + HA.num(t.gas, 2) + ' m³' : '';
   document.getElementById('tExp').innerHTML = kwh(exp);
   document.getElementById('tExpSub').textContent = sol > 0 ? HA.num(Math.min(100, exp / sol * 100)) + '% van de opwek' : '';
-  drawHours(e.hours || []);
+  var curve = e.series && e.series.length > 1;
+  document.getElementById('hoursLbl').textContent = curve ? 'Vandaag' : 'Vandaag per uur';
+  document.getElementById('hoursLeg').innerHTML = curve
+    ? '<span><span class="dot" style="background:var(--sun)"></span>zon</span><span><span class="dot" style="background:var(--home)"></span>huis</span><span><span class="dot" style="background:var(--grid)"></span>net</span>'
+    : '<span><span class="dot" style="background:var(--sun)"></span>zon gebruikt</span><span><span class="dot" style="background:var(--grid)"></span>van net</span><span><span class="dot" style="background:var(--export)"></span>terug</span>';
+  if (curve) drawCurve(e.series); else drawHours(e.hours || []);
   drawDays(e.days || []);
 }
 HA.start(render);
