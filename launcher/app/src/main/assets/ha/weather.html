@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Weer</title>
 <link rel="stylesheet" href="leaflet.css">
+<link rel="stylesheet" href="maplibre-gl.css">
 <link rel="stylesheet" href="common.css">
 <style>
   .body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1.75fr 1fr; gap: calc(var(--u) * 1.4); }
@@ -74,6 +75,8 @@
 <div class="empty"><b>Nog geen weergegevens</b>Home Assistant stuurt ze binnen een paar minuten.</div>
 
 <script src="leaflet.js"></script>
+<script src="maplibre-gl.js"></script>
+<script src="leaflet-maplibre-gl.js"></script>
 <script src="common.js"></script>
 <script>
 HA.nav(document.getElementById('nav'));
@@ -89,8 +92,9 @@ function setupMap(home) {
   map = L.map('map', { zoomControl: false, attributionControl: true, keyboard: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, touchZoom: false, fadeAnimation: true })
     .setView([c[0] + 0.35, c[1]], 7);
   map.attributionControl.setPrefix(false);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', { subdomains: 'abcd', maxZoom: 12, attribution: '© OpenStreetMap · © CARTO · RainViewer' }).addTo(map);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png', { subdomains: 'abcd', maxZoom: 12, pane: 'shadowPane' }).addTo(map);
+  // OpenFreeMap: free vector map, no key. Own pane under the radar tiles.
+  map.createPane('base').style.zIndex = 150;
+  L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/dark', pane: 'base', attribution: 'OpenFreeMap © OpenMapTiles · © OpenStreetMap · RainViewer' }).addTo(map);
   L.marker(c, { icon: L.divIcon({ className: '', html: '<div class="home-pin"></div>', iconSize: [12, 12] }), interactive: false, keyboard: false }).addTo(map);
   loadRadar();
   setInterval(loadRadar, 10 * 60 * 1000);

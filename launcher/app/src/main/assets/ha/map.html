@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Locatie</title>
 <link rel="stylesheet" href="leaflet.css">
+<link rel="stylesheet" href="maplibre-gl.css">
 <link rel="stylesheet" href="common.css">
 <style>
   #map { position: absolute; inset: 0; }
@@ -38,12 +39,16 @@
 <div class="empty"><b>Nog geen locaties</b>Home Assistant stuurt ze binnen een paar minuten.</div>
 
 <script src="leaflet.js"></script>
+<script src="maplibre-gl.js"></script>
+<script src="leaflet-maplibre-gl.js"></script>
 <script src="common.js"></script>
 <script>
 HA.nav(document.getElementById('nav'));
 var map = L.map('map', { zoomControl: false, keyboard: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, touchZoom: false });
 map.attributionControl.setPrefix(false);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap · © CARTO' }).addTo(map);
+// OpenFreeMap: free vector map, no key.
+map.createPane('base').style.zIndex = 150;
+L.maplibreGL({ style: 'https://tiles.openfreemap.org/styles/liberty', pane: 'base', attribution: 'OpenFreeMap © OpenMapTiles · © OpenStreetMap' }).addTo(map);
 var layer = L.layerGroup().addTo(map), lastKey = '';
 
 function initials(n) { return (n || '?').trim().charAt(0).toUpperCase(); }
