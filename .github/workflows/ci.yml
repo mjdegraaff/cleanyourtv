@@ -45,7 +45,13 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon testReleaseUnitTest lintRelease assembleRelease
       - name: The launcher stays small
+        # The 400 KB budget is for the launcher itself. The Home Assistant detail pages (assets/ha: map library,
+        # font) only load when one is opened, so they get their own budget instead of eating the launcher's.
         run: |
-          size=$(stat -c %s launcher/app/build/outputs/apk/release/app-release.apk)
-          echo "release APK: $((size / 1024)) KB"
-          test "$size" -lt 409600 || { echo "APK is over 400 KB; the launcher targets 1 GB TVs, keep it small"; exit 1; }
+          apk=launcher/app/build/outputs/apk/release/app-release.apk
+          size=$(stat -c %s "$apk")
+          ha=$(unzip -lv "$apk" | awk '$8 ~ /^assets\/ha\// {s += $3} END {print s + 0}')
+          core=$((size - ha))
+          echo "release APK: $((size / 1024)) KB, of which HA pages $((ha / 1024)) KB, launcher $((core / 1024)) KB"
+          test "$core" -lt 409600 || { echo "Launcher is over 400 KB; it targets 1 GB TVs, keep it small"; exit 1; }
+          test "$ha" -lt 512000 || { echo "HA pages are over 500 KB"; exit 1; }

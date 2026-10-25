@@ -143,7 +143,7 @@ final class HaStrip {
             while (n < buf.length && (r = in.read(buf, n, buf.length - n)) > 0) n += r;
         }
         String text = new String(buf, 0, n, StandardCharsets.UTF_8);
-        if (text.startsWith("﻿")) text = text.substring(1);
+        if (text.startsWith("\uFEFF")) text = text.substring(1);
         return new JSONObject(text).optJSONArray("tiles");
     }
 
@@ -293,9 +293,9 @@ final class HaStrip {
         for (int i = 0; i < s.length() && out.length() < max; i++) {
             char c = s.charAt(i);
             if (Character.isISOControl(c)) continue;
-            if (c >= '‪' && c <= '‮') continue;
-            if (c >= '⁦' && c <= '⁩') continue;
-            if (c == ' ' || c == ' ') continue;
+            if (c >= '\u202A' && c <= '\u202E') continue;
+            if (c >= '\u2066' && c <= '\u2069') continue;
+            if (c == '\u2028' || c == '\u2029') continue;
             out.append(c);
         }
         return out.toString().trim();
