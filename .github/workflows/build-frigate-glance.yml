@@ -1,0 +1,26 @@
+name: Build Frigate Glance APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['addons/frigate-glance/**', '.github/workflows/build-frigate-glance.yml']
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platforms;android-34 build-tools;34.0.0
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build
+        working-directory: addons/frigate-glance
+        run: chmod +x gradlew && ./gradlew --no-daemon assembleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frigate-glance-apk
+          path: addons/frigate-glance/app/build/outputs/apk/release/app-release.apk
