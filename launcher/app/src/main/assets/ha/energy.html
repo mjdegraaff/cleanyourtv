@@ -20,7 +20,8 @@
   .pipe.rev { animation-direction: reverse; }
   @keyframes run { to { stroke-dashoffset: -24; } }
 
-  .today { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--u) * 1); }
+  :root { --bat: #B79CFF; --gas: #FF9E7A; }
+  .today { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: calc(var(--u) * 1); }
   .today .card { padding: calc(var(--u) * 1) calc(var(--u) * 1.3); }
   .today .big { font-size: calc(var(--u) * 2.2); }
   .dot { display: inline-block; width: calc(var(--u) * .6); height: calc(var(--u) * .6); border-radius: 50%; margin-right: calc(var(--u) * .45); vertical-align: middle; }
@@ -38,6 +39,7 @@
   .a-sun { fill: var(--sun); fill-opacity: .22; stroke: none; }
   .l-home { fill: none; stroke: var(--home); stroke-width: 2.4; stroke-linejoin: round; }
   .l-grid { fill: none; stroke: var(--grid); stroke-width: 1.8; stroke-linejoin: round; opacity: .9; }
+  .l-bat { fill: none; stroke: var(--bat); stroke-width: 2; stroke-linejoin: round; }
   .nowline { stroke: rgba(255,255,255,.45); stroke-width: 1.2; stroke-dasharray: 3 4; }
 </style>
 </head>
@@ -53,13 +55,15 @@
   <div class="top">
     <div class="card flow">
       <div class="label">Nu</div>
-      <svg id="flow" viewBox="-120 0 660 160" preserveAspectRatio="xMidYMid meet"></svg>
+      <svg id="flow" viewBox="-120 0 840 160" preserveAspectRatio="xMidYMid meet"></svg>
     </div>
     <div class="today">
       <div class="card"><div class="label"><span class="dot" style="background:var(--sun)"></span>Zon vandaag</div><div class="big" id="tSol"></div><div class="sub" id="tSolSub"></div></div>
       <div class="card"><div class="label"><span class="dot" style="background:var(--home)"></span>Verbruik vandaag</div><div class="big" id="tUse"></div><div class="sub" id="tUseSub"></div><svg class="ring" id="ring" viewBox="0 0 42 42"></svg></div>
       <div class="card"><div class="label"><span class="dot" style="background:var(--grid)"></span>Van het net</div><div class="big" id="tImp"></div><div class="sub" id="tImpSub"></div></div>
       <div class="card"><div class="label"><span class="dot" style="background:var(--export)"></span>Teruggeleverd</div><div class="big" id="tExp"></div><div class="sub" id="tExpSub"></div></div>
+      <div class="card"><div class="label"><span class="dot" style="background:var(--bat)"></span>Accu</div><div class="big" id="tBat"></div><div class="sub" id="tBatSub"></div></div>
+      <div class="card"><div class="label"><span class="dot" style="background:var(--gas)"></span>Gas vandaag</div><div class="big" id="tGas"></div><div class="sub" id="tGasSub"></div></div>
     </div>
   </div>
 
@@ -93,32 +97,46 @@ function el(tag, attrs, text) {
 function kwh(v, dec) { return HA.num(v, dec === undefined ? (v < 10 ? 1 : 0) : dec) + '<small>kWh</small>'; }
 function plainW(w) { w = Math.abs(w || 0); return w >= 1000 ? HA.num(w / 1000, 1) + ' kW' : HA.num(w) + ' W'; }
 
-function drawFlow(now) {
+function drawFlow(now, gasToday) {
   var svg = document.getElementById('flow');
   svg.innerHTML = '';
   var sol = Math.max(0, now.solar || 0), grid = now.grid || 0;   // grid > 0: import, < 0: export
-  var house = Math.max(0, sol + grid);
+  var bat = now.bat || 0;                                         // bat > 0: accu levert, < 0: accu laadt
+  var hasBat = now.soc !== undefined && now.soc !== null;
+  var house = Math.max(0, sol + grid + bat);
   var cs = getComputedStyle(document.documentElement);
   var cSun = cs.getPropertyValue('--sun').trim(), cGrid = cs.getPropertyValue('--grid').trim(),
-      cExp = cs.getPropertyValue('--export').trim(), cHome = cs.getPropertyValue('--home').trim();
+      cExp = cs.getPropertyValue('--export').trim(), cHome = cs.getPropertyValue('--home').trim(),
+      cBat = cs.getPropertyValue('--bat').trim(), cGas = cs.getPropertyValue('--gas').trim();
+  var HX = 330, HY = 100;
 
-  // pipes: sun -> house, grid <-> house, sun -> grid (export)
-  var pS = el('path', { d: 'M110 40 C 230 40, 260 80, 380 80', class: 'pipe' + (sol > 20 ? ' live' : ''), stroke: cSun });
+  // pipes: sun -> house, grid <-> house (left), house <-> accu, gas -> house (right)
   var gColor = grid < -20 ? cExp : cGrid;
-  var pG = el('path', { d: 'M110 120 C 230 120, 260 80, 380 80', class: 'pipe' + (Math.abs(grid) > 20 ? ' live' : '') + (grid < -20 ? ' rev' : ''), stroke: gColor });
-  svg.appendChild(pS); svg.appendChild(pG);
+  svg.appendChild(el('path', { d: 'M110 30 C 220 30, 230 ' + HY + ', ' + (HX - 18) + ' ' + HY, class: 'pipe' + (sol > 20 ? ' live' : ''), stroke: cSun }));
+  svg.appendChild(el('path', { d: 'M110 130 C 220 130, 230 ' + HY + ', ' + (HX - 18) + ' ' + HY, class: 'pipe' + (Math.abs(grid) > 20 ? ' live' : '') + (grid < -20 ? ' rev' : ''), stroke: gColor }));
+  if (hasBat) svg.appendChild(el('path', { d: 'M' + (HX + 18) + ' ' + HY + ' C 440 ' + HY + ', 440 30, 550 30', class: 'pipe' + (Math.abs(bat) > 20 ? ' live' : '') + (bat > 20 ? ' rev' : ''), stroke: cBat }));
+  if (now.gas_live !== undefined) svg.appendChild(el('path', { d: 'M550 130 C 440 130, 440 ' + HY + ', ' + (HX + 18) + ' ' + HY, class: 'pipe' + (now.gas_live ? ' live' : ''), stroke: cGas }));
 
-  function node(x, y, color, label, value, sub, anchor) {
+  function dot(x, y, color) {
     svg.appendChild(el('circle', { cx: x, cy: y, r: 9, fill: color }));
     svg.appendChild(el('circle', { cx: x, cy: y, r: 17, fill: 'none', stroke: color, 'stroke-opacity': .35, 'stroke-width': 2 }));
+  }
+  function node(x, y, color, label, value, sub, anchor) {
+    dot(x, y, color);
     var tx = anchor === 'end' ? x - 30 : x + 30;
-    svg.appendChild(el('text', { x: tx, y: y - 16, class: 'node-l', 'text-anchor': anchor }, label));
+    svg.appendChild(el('text', { x: tx, y: y - 22, class: 'node-l', 'text-anchor': anchor }, label));
     svg.appendChild(el('text', { x: tx, y: y + 12, class: 'node-v', 'text-anchor': anchor }, value));
     if (sub) svg.appendChild(el('text', { x: tx, y: y + 30, class: 'node-s', 'text-anchor': anchor }, sub));
   }
-  node(92, 40, cSun, 'Zon', plainW(sol), sol > 20 ? 'wordt opgewekt' : 'geen opwek', 'end');
-  node(92, 120, gColor, 'Net', plainW(grid), grid < -20 ? 'teruglevering' : grid > 20 ? 'afname' : 'in balans', 'end');
-  node(398, 80, cHome, 'Huis', plainW(house), 'verbruik nu', 'start');
+  node(92, 30, cSun, 'Zon', plainW(sol), sol > 20 ? 'wordt opgewekt' : 'geen opwek', 'end');
+  node(92, 130, gColor, 'Net', plainW(grid), grid < -20 ? 'teruglevering' : grid > 20 ? 'afname' : 'in balans', 'end');
+  // het huis in het midden: woorden erboven en eronder, de leidingen komen van links en rechts
+  dot(HX, HY, cHome);
+  svg.appendChild(el('text', { x: HX, y: 10, class: 'node-l', 'text-anchor': 'middle' }, 'Huis'));
+  svg.appendChild(el('text', { x: HX, y: 52, class: 'node-v', 'text-anchor': 'middle' }, plainW(house)));
+  svg.appendChild(el('text', { x: HX, y: 148, class: 'node-s', 'text-anchor': 'middle' }, 'verbruik nu'));
+  if (hasBat) node(568, 30, cBat, 'Accu', HA.num(now.soc) + ' %', bat < -20 ? 'laadt ' + plainW(bat) : bat > 20 ? 'levert ' + plainW(bat) : 'rust', 'start');
+  if (now.gas_live !== undefined) node(568, 130, cGas, 'Gas', gasToday !== undefined && gasToday !== null ? HA.num(gasToday, gasToday < 10 ? 1 : 0) + ' m³' : '–', now.gas_live ? 'brandt nu' : 'brandt niet', 'start');
 }
 
 function ring(pct) {
@@ -197,7 +215,12 @@ function drawCurve(series) {
   var N = Math.max(288, Math.round((d1 - d0) / 300000));   // 300 slots on the clock-change day
   var pts = series.filter(function (r) { return r && r[0] >= 0 && r[0] < N; }).sort(function (a, b2) { return a[0] - b2[0]; });
   var vals = [];
-  pts.forEach(function (r) { var s = Math.max(0, r[1] || 0), g = r[2] || 0; r.s = s; r.g = g; r.h = Math.max(0, s + g); vals.push(s, g, r.h); });
+  var hasBat = false;
+  pts.forEach(function (r) {
+    var s = Math.max(0, r[1] || 0), g = r[2] || 0, bt = r.length > 3 && r[3] !== null ? r[3] : null;
+    r.s = s; r.g = g; r.b = bt || 0; r.h = Math.max(0, s + g + r.b); vals.push(s, g, r.h);
+    if (bt !== null) { hasBat = true; vals.push(bt); }
+  });
   var max = Math.max(1000, Math.max.apply(null, vals)), min = Math.min(0, Math.min.apply(null, vals));
   var range = max - min, step = range <= 3000 ? 1000 : range <= 8000 ? 2000 : 5000;
   max = Math.ceil(max / step) * step; min = Math.floor(min / step) * step;
@@ -227,6 +250,7 @@ function drawCurve(series) {
     svg.appendChild(el('path', { d: area, class: 'a-sun' }));
     svg.appendChild(el('path', { d: path('s'), class: 'l-sun' }));
     svg.appendChild(el('path', { d: path('g'), class: 'l-grid' }));
+    if (hasBat) svg.appendChild(el('path', { d: path('b'), class: 'l-bat' }));
     svg.appendChild(el('path', { d: path('h'), class: 'l-home' }));
   }
   var nowI = Math.min(N - 1, Math.floor((Date.now() - d0) / 300000));
@@ -260,22 +284,27 @@ function drawDays(days) {
 function render(data) {
   var e = data.energy || {}, now = e.now || {}, t = e.today || {};
   document.getElementById('meta').textContent = data.updated ? 'bijgewerkt ' + HA.time(data.updated) : '';
-  drawFlow(now);
+  drawFlow(now, t.gas);
   var sol = t.solar || 0, imp = t.import || 0, exp = t.export || 0;
-  var use = Math.max(0, imp + sol - exp), own = Math.max(0, sol - exp);
+  var bin = t.bat_in || 0, bout = t.bat_out || 0;
+  var use = Math.max(0, imp + sol - exp + bout - bin), own = Math.max(0, use - imp);
   document.getElementById('tSol').innerHTML = kwh(sol);
-  document.getElementById('tSolSub').textContent = sol > 0 ? HA.num(own, 1) + ' kWh zelf gebruikt' : 'nog geen opwek';
+  document.getElementById('tSolSub').textContent = sol > 0 ? HA.num(Math.max(0, sol - exp), 1) + ' kWh zelf gebruikt' : 'nog geen opwek';
   document.getElementById('tUse').innerHTML = kwh(use);
-  document.getElementById('tUseSub').textContent = use > 0 ? 'zelfvoorzienend' : '';
+  document.getElementById('tUseSub').textContent = use > 0 ? 'eigen opwek' : '';
   ring(use > 0 ? own / use : 0);
   document.getElementById('tImp').innerHTML = kwh(imp);
-  document.getElementById('tImpSub').textContent = t.gas !== undefined && t.gas !== null ? 'gas ' + HA.num(t.gas, 2) + ' m³' : '';
+  document.getElementById('tImpSub').textContent = use > 0 ? HA.num(imp / use * 100) + '% van het verbruik' : '';
   document.getElementById('tExp').innerHTML = kwh(exp);
   document.getElementById('tExpSub').textContent = sol > 0 ? HA.num(Math.min(100, exp / sol * 100)) + '% van de opwek' : '';
+  document.getElementById('tBat').innerHTML = now.soc !== undefined && now.soc !== null ? HA.num(now.soc) + '<small>%</small>' : '–';
+  document.getElementById('tBatSub').textContent = (t.bat_in !== undefined ? HA.num(bin, 1) + ' kWh in · ' + HA.num(bout, 1) + ' kWh uit' : '');
+  document.getElementById('tGas').innerHTML = t.gas !== undefined && t.gas !== null ? HA.num(t.gas, t.gas < 10 ? 1 : 0) + '<small>m³</small>' : '–';
+  document.getElementById('tGasSub').textContent = now.gas_live ? 'brandt nu' : '';
   var curve = e.series && e.series.length > 1;
   document.getElementById('hoursLbl').textContent = curve ? 'Vandaag' : 'Vandaag per uur';
   document.getElementById('hoursLeg').innerHTML = curve
-    ? '<span><span class="dot" style="background:var(--sun)"></span>zon</span><span><span class="dot" style="background:var(--home)"></span>huis</span><span><span class="dot" style="background:var(--grid)"></span>net</span>'
+    ? '<span><span class="dot" style="background:var(--sun)"></span>zon</span><span><span class="dot" style="background:var(--home)"></span>huis</span><span><span class="dot" style="background:var(--grid)"></span>net</span>' + (e.series.some(function (r) { return r.length > 3 && r[3] !== null; }) ? '<span><span class="dot" style="background:var(--bat)"></span>accu</span>' : '')
     : '<span><span class="dot" style="background:var(--sun)"></span>zon gebruikt</span><span><span class="dot" style="background:var(--grid)"></span>van net</span><span><span class="dot" style="background:var(--export)"></span>terug</span>';
   if (curve) drawCurve(e.series); else drawHours(e.hours || []);
   drawDays(e.days || []);
