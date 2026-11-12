@@ -72,8 +72,10 @@ A label is rejected when:
 - it contains `verified` or `official` anywhere: words that imply endorsement are reserved, and
   nothing a module declares is ever presented as endorsed (the same two words are refused in the
   caption);
-- it is one of the names the launcher's own UI uses, in English or in the TV's language:
-  `Home`, `Settings`, `Inputs`, `Wi-Fi`, `Live TV`, `Default home`, `Clock`, `cleanyourtv`, `tv-vibehack`;
+- it is one of the names the launcher's own UI uses, in English or in the TV's language: what its
+  pills and dialogs say (`Home`, `Settings`, `Inputs`, `Wi-Fi`, `Live TV`, `App library`,
+  `Choose default home`), the name of the clock screensaver in the TV's screensaver picker (`Clock`),
+  `Default home` word for word, and the two project names `cleanyourtv` and `tv-vibehack`;
 - it names an input the Inputs menu shows: `HDMI` and anything starting with it, `AV`;
 - while the prompt is due (a new card, or one whose signing key or label changed): it equals the label of
   another app installed on this TV (the names on the home screen), or the app's own label equals
@@ -149,7 +151,9 @@ any violation drops that one card, with a log line and no other effect.
    signing key needs no new prompt.
 9. Launch. A card launches the declaring activity by explicit component with no extras and no data,
    the same way every tile is launched. No field of a card can name an intent, a URI, a class or a
-   package. Holding OK on a card opens the app's App info page, like any tile.
+   package. Holding OK on a card opens the same tile menu a tile opens (`tile_menu`, on by default
+   since launcher 3.3: Move, Remove from Home with `app_library`, and App info where the firmware has
+   that page); with `tile_menu` off it opens the app's App info page, as it did before.
 10. Off switch. `module_cards` in `config.xml` or the `config.json` theme overlay (default `true`). When `false` the launcher never looks
     for cards, never asks, and the Module cards list only says that none are installed.
 
